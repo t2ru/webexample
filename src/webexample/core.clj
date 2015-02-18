@@ -5,9 +5,10 @@
             [immutant.web]
             [immutant.transactions]
             [immutant.transactions.jdbc]
-            [compojure.core :refer [defroutes ANY]]
+            [compojure.core :refer [defroutes routes ANY]]
             [compojure.route]
-            [liberator.core :refer [resource]]))
+            [liberator.core :refer [resource]])
+  (:gen-class))
 
 ;;; utilities
 
@@ -69,34 +70,37 @@
       (sql/with-db-transaction [txn dbspec :isolation :serializable]
         (handler (assoc request :db txn))))))
 
-(def db {:classname "org.h2.Driver"
-         :subprotocol "h2"
-         :subname "./db/test"
-         :factory immutant.transactions.jdbc/factory})
+(defn handler [& {db :db}]
+  (routes
+    (-> task-service
+        (wrap-transaction db))
+    (ANY "/" [] (io/resource "public/index.html"))
+    (compojure.route/resources "/" :root "public")
+    (ANY "*" []
+         (resource
+           :available-media-types ["*"]
+           :exists? false))))
 
-(defroutes app
-  (-> task-service
-      (wrap-transaction db))
-  (ANY "/" [] (io/resource "public/index.html"))
-  (compojure.route/resources "/" :root "public")
-  (ANY "*" []
-       (resource
-         :available-media-types ["*"]
-         :exists? false)))
-
-(defn make-db []
+(defn make-db [db]
   (sql/execute!
     db
-    [(str "CREATE TABLE task ("
+    [(str "CREATE TABLE IF NOT EXISTS task ("
           " id INTEGER PRIMARY KEY,"
           " title VARCHAR(255))")]))
 
-(def handler
-  (-> app
-      (wrap-database db)))
-
 (defn run []
-  (immutant.web/run handler))
+  (let [db {:classname "org.h2.Driver"
+            :subprotocol "h2"
+            :subname "./db/test"
+            :factory immutant.transactions.jdbc/factory}]
+    (make-db db)
+    (immutant.web/run (handler :db db) :path "/webexample")))
 
 (defn stop []
   (immutant.web/stop))
+
+(defn -main []
+  (let [db {:name "java:/datasource/example"
+            :factory immutant.transactions.jdbc/factory}]
+    (make-db db)
+    (immutant.web/run (handler :db db))))

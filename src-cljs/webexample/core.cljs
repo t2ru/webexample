@@ -6,7 +6,7 @@
 ;;; handlers
 
 (defn list-tasks [a]
-  (GET "/task"
+  (GET "task"
        {:handler #(reset! a %)
         :error-handler #(js/alert %)}))
 
@@ -16,7 +16,7 @@
         f (fn [v response] (cons {"id" (get response "id") "title" title} v))]
     (when-not (= title "")
       (set! (.-value elem) "")
-      (POST "/task"
+      (POST "task"
             {:params {:title title}
              :format :json
              :handler #(swap! a f %)
@@ -29,7 +29,7 @@
         f (fn [v] (map (fn [{xid "id" xtitle "title" :as t}]
                          (if (= id xid) {"id" id "title" new-title} t)) v))]
     (when-not (= new-title "")
-      (PUT (str "/task/" id)
+      (PUT (str "task/" id)
            {:params {:title new-title}
             :format :json
             :handler #(swap! a f)
@@ -38,7 +38,7 @@
 
 (defn delete-task [a id]
   (let [f (fn [v] (filter #(not= id (get % "id")) v))]
-    (DELETE (str "/task/" id)
+    (DELETE (str "task/" id)
             {:format :json
              :handler #(swap! a f)
              :error-handler #(js/alert %)})))
