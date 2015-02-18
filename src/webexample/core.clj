@@ -5,7 +5,7 @@
             [immutant.web]
             [immutant.transactions]
             [immutant.transactions.jdbc]
-            [compojure.core :refer [defroutes routes ANY]]
+            [compojure.core :refer [defroutes routes ANY GET POST PUT DELETE]]
             [compojure.route]
             [liberator.core :refer [resource]]
             [yesql.core :refer [defqueries]])
@@ -24,30 +24,43 @@
 (defqueries "data/task.sql")
 
 (defroutes task-service
-  (ANY "/task" {:keys [request-method db body]}
-       (let [data (when (= request-method :post) (as-json body :key-fn keyword))
-             new-id (when (= request-method :post)
-                      (let [r (next-task-id db)]
-                        (or (:newid (first r)) 0)))]
-         (resource
-           :allowed-methods [:get :post]
-           :malformed? (and (= request-method :post) (nil? data))
-           :available-media-types ["application/json"]
-           :handle-ok (list-tasks db)
-           :handle-malformed (pr-str data)
-           :post! (fn [ctx] (new-task! db new-id (:title data)))
-           :handle-created {:id new-id})))
+  (GET "/task" {:keys [db]}
+    (resource
+      :allowed-methods [:get]
+      :available-media-types ["application/json"]
+      :handle-ok (list-tasks db)))
 
-  (ANY "/task/:id" [id :as {:keys [request-method db body]}]
-       (let [data (when (= request-method :put) (as-json body :key-fn keyword))]
-         (resource
-           :allowed-methods [:get :put :delete]
-           :available-media-types ["application/json"]
-           :malformed? (and (= request-method :put) (nil? data))
-           :handle-ok (fn [_] (first (get-task db)))
-           :put!  (fn [_] (update-task! db (:title data) id))
-           :new? false
-           :delete! (fn [_] (delete-task! db id))))))
+  (POST "/task" {:keys [db body]}
+    (let [data (as-json body :key-fn keyword)
+          new-id (or (:newid (first (next-task-id db))) 0)]
+      (resource
+        :allowed-methods [:post]
+        :available-media-types ["application/json"]
+        :malformed? (nil? (:title data))
+        :handle-malformed (pr-str data)
+        :post! (fn [_] (new-task! db new-id (:title data)))
+        :handle-created {:id new-id})))
+
+  (GET "/task/:id" [id :as {:keys [db]}]
+    (resource
+      :allowed-methods [:get]
+      :available-media-types ["application/json"]
+      :handle-ok (fn [_] (first (get-task db)))))
+
+  (PUT "/task/:id" [id :as {:keys [db body]}]
+    (let [data (as-json body :key-fn keyword)]
+      (resource
+        :allowed-methods [:put]
+        :available-media-types ["application/json"]
+        :malformed? (nil? (:title data))
+        :put! (fn [_] (update-task! db (:title data) id))
+        :new? false)))
+
+  (DELETE "/task/:id" [id :as {:keys [db]}]
+    (resource
+      :allowed-methods [:delete]
+      :available-media-types ["application/json"]
+      :delete! (fn [_] (delete-task! db id)))))
 
 
 ;;; configuration
