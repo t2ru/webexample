@@ -7,7 +7,8 @@
             [immutant.transactions.jdbc]
             [compojure.core :refer [defroutes routes ANY]]
             [compojure.route]
-            [liberator.core :refer [resource]])
+            [liberator.core :refer [resource]]
+            [yesql.core :refer [defqueries]])
   (:gen-class))
 
 ;;; utilities
@@ -21,25 +22,21 @@
 
 ;;; services
 
+(defqueries "data/task.sql")
+
 (defroutes task-service
   (ANY "/task" {:keys [request-method db body]}
        (let [data (when (= request-method :post) (as-json body))
              new-id (when (= request-method :post)
-                      (let [r (sql/query
-                                db ["SELECT MAX(id)+1 AS newid FROM task"])]
+                      (let [r (next-task-id db)]
                         (or (:newid (first r)) 0)))]
          (resource
            :allowed-methods [:get :post]
            :malformed? (and (= request-method :post) (nil? data))
            :available-media-types ["application/json"]
-           :handle-ok (sql/query
-                        db ["SELECT id, title FROM task ORDER BY id DESC"])
+           :handle-ok (list-tasks db)
            :handle-malformed (pr-str data)
-           :post!
-           (fn [ctx]
-             (let [title (get data "title")]
-               (sql/execute! db ["INSERT INTO task (id, title) VALUES (?, ?)"
-                                 new-id title])))
+           :post! (fn [ctx] (new-task! db new-id (get data "title")))
            :handle-created {:id new-id})))
 
   (ANY "/task/:id" [id :as {:keys [request-method db body]}]
@@ -48,18 +45,10 @@
            :allowed-methods [:get :put :delete]
            :available-media-types ["application/json"]
            :malformed? (and (= request-method :put) (nil? data))
-           :handle-ok
-           (fn [_] (->> (sql/query
-                          db ["SELECT id, title FROM task WHERE id = ?" id])
-                        first))
-           :put!
-           (fn [_]
-             (let [title (get data "title")]
-               (sql/execute! db ["UPDATE task SET title = ? WHERE id = ?"
-                                 title id])))
+           :handle-ok (fn [_] (first (get-task db)))
+           :put!  (fn [_] (update-task! db (get data "title") id))
            :new? false
-           :delete!
-           (fn [_] (sql/execute! db ["DELETE FROM task WHERE id = ?" id]))))))
+           :delete! (fn [_] (delete-task! db id))))))
 
 
 ;;; configuration
@@ -82,11 +71,7 @@
            :exists? false))))
 
 (defn make-db [db]
-  (sql/execute!
-    db
-    [(str "CREATE TABLE IF NOT EXISTS task ("
-          " id INTEGER PRIMARY KEY,"
-          " title VARCHAR(255))")]))
+  (create-task-table! db))
 
 (defn run []
   (let [db {:classname "org.h2.Driver"
