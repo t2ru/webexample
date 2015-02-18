@@ -31,7 +31,8 @@
       :handle-ok (list-tasks db)))
 
   (POST "/task" {:keys [db body]}
-    (let [data (as-json body :key-fn keyword)
+    (let [data (try (as-json body :key-fn keyword :eof-error? false)
+                    (catch Exception e nil))
           new-id (or (:newid (first (next-task-id db))) 0)]
       (resource
         :allowed-methods [:post]
@@ -48,7 +49,8 @@
       :handle-ok (fn [_] (first (get-task db)))))
 
   (PUT "/task/:id" [id :as {:keys [db body]}]
-    (let [data (as-json body :key-fn keyword)]
+    (let [data (try (as-json body :key-fn keyword :eof-error? false)
+                    (catch Exception e nil))]
       (resource
         :allowed-methods [:put]
         :available-media-types ["application/json"]
