@@ -80,9 +80,9 @@
     (ANY "/" [] (io/resource "public/index.html"))
     (compojure.route/resources "/" :root "public")
     (ANY "*" []
-         (resource
-           :available-media-types ["*"]
-           :exists? false))))
+      (resource
+        :available-media-types ["*"]
+        :exists? false))))
 
 (defn make-db [db]
   (create-task-table! db))
