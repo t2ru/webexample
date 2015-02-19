@@ -46,7 +46,7 @@
     (resource
       :allowed-methods [:get]
       :available-media-types ["application/json"]
-      :handle-ok (fn [_] (first (get-task db)))))
+      :handle-ok (fn [_] (first (get-task db id)))))
 
   (PUT "/task/:id" [id :as {:keys [db body]}]
     (let [data (try (as-json body :key-fn keyword :eof-error? false)
@@ -67,11 +67,11 @@
 
 ;;; configuration
 
-(defn wrap-transaction [handler dbspec]
+(defn wrap-transaction [f dbspec]
   (fn [request]
     (immutant.transactions/transaction
       (sql/with-db-transaction [txn dbspec :isolation :serializable]
-        (handler (assoc request :db txn))))))
+        (f (assoc request :db txn))))))
 
 (defn handler [& {db :db}]
   (routes
